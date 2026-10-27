@@ -141,20 +141,26 @@ export function totals(profs) {
   return { byLevel, profs: profs.length, apps: profs.reduce((n, p) => n + p.apps.length, 0) };
 }
 
-/** 쇼케이스 장면: 앱 순서대로 그 앱의 화면 한 장씩. 화면이 없는 앱은 글자만 있는 장면 하나. */
-export function slides(p) {
+const tall = (s) => s.h > s.w;
+
+/**
+ * 쇼케이스 장면: 앱 순서대로 그 앱의 화면 한 장씩. 화면이 없는 앱은 글자만 있는 장면 하나.
+ * narrow(휴대폰)면 휴대폰(세로) 화면만, 아니면 PC(가로) 화면만 쓴다. 그 모양이 없는 앱은 있는 화면을 쓴다.
+ */
+export function slides(p, narrow = false) {
   const out = [];
   p.apps.forEach((a, ai) => {
     if (!a.shots.length) out.push({ app: a, appIndex: ai, shot: null });
-    a.shots.forEach((s) => out.push({ app: a, appIndex: ai, shot: s }));
+    const fit = a.shots.filter((s) => tall(s) === narrow);
+    (fit.length ? fit : a.shots).forEach((s) => out.push({ app: a, appIndex: ai, shot: s }));
   });
   return out;
 }
 
-/** 카드 대표 화면: 맨 앞 앱의 첫 화면. */
+/** 카드 대표 화면: 맨 앞 앱의 휴대폰(세로) 화면(카드 너비에서도 글자가 읽힌다). 없으면 그 앱의 첫 화면. */
 export function coverShot(p) {
   const a = p.apps.find((x) => x.shots.length);
-  return a ? a.shots[0] : null;
+  return a ? a.shots.find(tall) || a.shots[0] : null;
 }
 
 export function findProf(data, id) {

@@ -2,12 +2,13 @@
 // 쓰던 내용과 고른 캡처는 바로바로 저장해 두었다가 새로 고친 뒤 다시 채운다(B5).
 import { h, clear } from './dom.js';
 import { DEPARTMENTS, OTHER } from './departments.js';
-import { LABELS, LIMITS, validate, chars } from './validate.js';
+import { LIMITS, validate, chars } from './validate.js';
 import { saveDraft, loadDraft, clearDraft } from './draft.js';
 import { shrink } from './images.js';
 import { call, backendReady } from './api.js';
 import { OPEN } from './config.js';
-import { closedView, doneView, NOTICE, CHECKS, HINTS } from './form-text.js';
+import { closedView, doneView, NOTICE } from './form-text.js';
+import { controls, field, shotsField, check } from './form-fields.js';
 
 const DEPT_NAMES = DEPARTMENTS.flatMap((g) => g.names);
 const TEXT_KEYS = ['name', 'dept', 'deptOther', 'email', 'appName', 'url', 'desc', 'github', 'coauthors'];
@@ -27,10 +28,6 @@ function b64(blob) {
   });
 }
 
-function input(key, attrs) {
-  return h(attrs.rows ? 'textarea' : 'input', { id: `f-${key}`, name: key, ...attrs });
-}
-
 export function renderRegister(root, ctx) {
   clear(root);
   const sample = ctx.mode === 'sample';
@@ -39,28 +36,13 @@ export function renderRegister(root, ctx) {
     return;
   }
   const shots = [];
+  // 이 화면에서 보내는 한 건의 이름표: 답을 놓쳐 다시 보내도 수신함은 한 줄만 만든다(같은 key)
+  const submitKey = crypto.randomUUID();
   const touched = new Set();
   let tried = false;
   let saveTimer = 0;
 
-  const el = {
-    name: input('name', { autocomplete: 'name', maxlength: LIMITS.name }),
-    dept: h('select', { id: 'f-dept', name: 'dept' },
-      h('option', { value: '' }, '학과를 고르세요'),
-      DEPARTMENTS.map((g) => h('optgroup', { label: g.series }, g.names.map((n) => h('option', { value: n }, n)))),
-      h('option', { value: OTHER }, '기타(직접 적기)')),
-    deptOther: input('deptOther', { maxlength: LIMITS.deptOther, placeholder: '학과 이름' }),
-    email: input('email', { type: 'email', inputmode: 'email', autocomplete: 'email', placeholder: '아이디@dit.ac.kr' }),
-    appName: input('appName', { maxlength: LIMITS.appName }),
-    url: input('url', { type: 'url', inputmode: 'url', placeholder: 'https://' }),
-    desc: input('desc', { rows: 2, maxlength: LIMITS.desc }),
-    github: input('github', { type: 'url', inputmode: 'url', placeholder: 'https://github.com/아이디/저장소' }),
-    coauthors: input('coauthors', { maxlength: LIMITS.coauthors }),
-    file: h('input', { id: 'f-shots', type: 'file', accept: 'image/*', multiple: true }),
-    consent: h('input', { id: 'f-consent', type: 'checkbox' }),
-    noPii: h('input', { id: 'f-noPii', type: 'checkbox' }),
-    ownWork: h('input', { id: 'f-ownWork', type: 'checkbox' }),
-  };
+  const el = controls();
   const counters = {
     appName: h('span.counter', { 'aria-live': 'off' }),
     desc: h('span.counter', { 'aria-live': 'off' }),
@@ -68,18 +50,6 @@ export function renderRegister(root, ctx) {
   const shotList = h('ul.shots');
   const submit = h('button.btn.btn-wide', { type: 'submit', disabled: true }, '등록하고 확인 메일 받기');
   const status = h('p.form-status', { 'aria-live': 'polite' });
-
-  function field(key, control, req) {
-    return h('div.field', { dataset: { key } },
-      h('label', { for: `f-${key}` }, LABELS[key], ' ', req ? h('span.req', null, '필수') : h('span.opt', null, '선택')),
-      control, counters[key] || null,
-      HINTS[key] ? h('p.hint', null, HINTS[key]) : null,
-      h('p.err', { id: `e-${key}` }));
-  }
-
-  function check(key, label) {
-    return h('label.check', { for: `f-${key}` }, el[key], h('span', null, h('b', null, label), ' ', CHECKS[key]));
-  }
 
   function read() {
     const v = {};
@@ -160,15 +130,13 @@ export function renderRegister(root, ctx) {
     field('dept', el.dept, true),
     field('deptOther', el.deptOther, true),
     field('email', el.email, true),
-    field('appName', el.appName, true),
+    field('appName', el.appName, true, counters.appName),
     field('url', el.url, true),
-    field('desc', el.desc, true),
+    field('desc', el.desc, true, counters.desc),
     field('github', el.github, false),
     field('coauthors', el.coauthors, false),
-    h('div.field', { dataset: { key: 'shots' } },
-      h('label', { for: 'f-shots' }, LABELS.shots, ' ', h('span.opt', null, `선택 · ${LIMITS.shots}장까지`)),
-      el.file, shotList, h('p.hint', null, HINTS.shots), h('p.err', { id: 'e-shots' })),
-    h('div.checks', null, check('consent', '공개 동의'), check('noPii', '학생 개인정보 없음'), check('ownWork', '본인 제작')),
+    shotsField(el.file, shotList),
+    h('div.checks', null, check('consent', el.consent, '공개 동의'), check('noPii', el.noPii, '학생 개인정보 없음'), check('ownWork', el.ownWork, '본인 제작')),
     NOTICE(),
     h('div.form-end', null, submit, status));
 
@@ -183,7 +151,7 @@ export function renderRegister(root, ctx) {
     refresh();
     try {
       const v = read();
-      const payload = { ...v, shots: await Promise.all(shots.map(async (s) => ({ name: s.name, type: s.blob.type, data: await b64(s.blob) }))) };
+      const payload = { ...v, key: submitKey, shots: await Promise.all(shots.map(async (s) => ({ name: s.name, type: s.blob.type, data: await b64(s.blob) }))) };
       await call('submit', payload);
       await clearDraft();
       busy = false;

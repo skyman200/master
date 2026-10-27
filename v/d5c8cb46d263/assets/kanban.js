@@ -17,11 +17,15 @@ function head(t) {
       h('dd', null, num(`lv${lv.n}`, t.byLevel[i]), '명')))));
 }
 
+// 카드 그림이 화면에서 차지하는 너비(app.css: 휴대폰 한 줄, 태블릿 두 줄, 컴퓨터 세 열). 선명한 화면은 큰 그림을 받는다.
+const SIZES = '(min-width: 1200px) 360px, (min-width: 900px) calc((100vw - 120px) / 3), (min-width: 600px) calc((100vw - 72px) / 2), calc(100vw - 40px)';
+
 // 열마다 첫 카드 그림은 바로 받는다(첫 화면에 보이는 그림 — 늦게 받으면 첫 화면이 늦게 뜬다). 나머지는 보일 때 받는다.
 function card(p, ctx, first) {
   const shot = coverShot(p);
+  const set = shot && shot.thumb !== shot.src ? `${ctx.asset(shot.thumb)} ${shot.tw}w, ${ctx.asset(shot.src)} ${shot.w}w` : null;
   const img = shot
-    ? h('img', { src: ctx.asset(shot.thumb), width: shot.tw, height: shot.th, alt: `${p.name} 교수 앱 화면`, loading: first ? 'eager' : 'lazy', decoding: 'async' })
+    ? h('img', { src: ctx.asset(shot.thumb), srcset: set, sizes: set && SIZES, width: shot.tw, height: shot.th, alt: `${p.name} 교수 앱 화면`, loading: first ? 'eager' : 'lazy', decoding: 'async' })
     : null;
   return h('li', { dataset: { id: p.id } },
     h('a.card', { href: `${ctx.prefix}/p/${p.id}`, dataset: { id: p.id }, onclick: (e) => ctx.open(e, p) },

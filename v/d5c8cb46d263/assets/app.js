@@ -49,11 +49,21 @@ function context(mode) {
   };
 }
 
+// 휴대폰 너비면 쇼케이스가 휴대폰 화면을 넘긴다. 화면을 돌려 너비가 바뀌면 열린 쇼케이스를 그 앱 자리에서 다시 그린다.
+const narrow = matchMedia('(max-width: 599px)');
 const showcase = createShowcase(layer, {
   get prefix() { return currentMode() === 'sample' ? '#/sample' : '#'; },
   asset: (p) => assetUrl(currentMode(), p),
+  narrow: () => narrow.matches,
   reduced: reducedMotion,
   close: closeShowcase,
+});
+narrow.addEventListener('change', () => {
+  if (!showcase.open) return;
+  dataFor(currentMode()).then((d) => {
+    const p = findProf(d, showcase.id);
+    if (p) showcase.refresh(p);
+  }, () => {});
 });
 
 function currentMode() {

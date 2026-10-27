@@ -51,6 +51,13 @@ export function isInternalHost(hostname) {
   return !host.includes('.') || INTERNAL_SUFFIX.test(host);
 }
 
+/** 공개되는 주소의 경로·?·# 뒤에 든 이메일('%40'·'%2E' 같은 표기도 풀어서, 두 번 싼 것까지. '/@아이디' 는 아님) */
+function urlHasEmail(s) {
+  let plain = String(s == null ? '' : s).trim().replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, '');
+  for (let i = 0; i < 3; i += 1) plain = plain.replace(/%([0-7][0-9a-f])/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  return /[\w.%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/.test(plain);
+}
+
 /** http(s) 주소면 URL, 아니면 null */
 export function parseHttpUrl(s) {
   try {
@@ -108,6 +115,7 @@ export function validate(v, deptNames) {
       errors.github = 'GitHub 저장소 주소(https://github.com/아이디/저장소)를 적어 주세요.';
     }
   }
+  ['url', 'github'].forEach((k) => { if (!errors[k] && urlHasEmail(v[k])) errors[k] = '주소에 이메일을 넣지 마세요(주소는 공개됩니다).'; });
 
   if (!blank(v.coauthors)) max('coauthors', LIMITS.coauthors);
 

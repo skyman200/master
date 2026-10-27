@@ -19,6 +19,7 @@ export async function renderConfirm(root, token, ctx) {
   try {
     const r = await call('confirm', { token });
     if (r.state === 'already') show(root, '이미 확인한 제출입니다', '판정이 진행 중이거나 끝났습니다. 결과는 메일로 알려 드립니다.', ctx);
+    else if (r.state === 'hold') show(root, '확인했습니다', '같은 앱 주소로 낸 제출이 이미 있어, AI허브센터가 먼저 살펴본 뒤 판정합니다. 결과는 메일로 알려 드립니다.', ctx);
     else show(root, '확인했습니다', '판정을 시작합니다. 보통 평일 3일 안에 결과를 메일로 알려 드립니다.', ctx);
   } catch (e) {
     show(root, '확인하지 못했습니다', `${e.message} 메일 속 버튼을 다시 눌러 주세요.`, ctx);

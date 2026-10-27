@@ -1,5 +1,6 @@
 // 공개 데이터 받기. 사이트 맨 위 version.json { shell, data } 이 지금 올라간 화면 버전과 데이터 버전이다.
-// - version.json 은 매번 새로 받는다(?t=지금, no-store). GitHub Pages 가 파일을 10분 캐시하기 때문(f-force-update).
+// - version.json 은 브라우저 캐시 없이 받는다(no-store). GitHub Pages 가 파일마다 '10분 캐시'를 붙이기 때문(f-force-update).
+//   Pages 앞단(CDN)은 주소 뒤 ?… 를 보지 않아 그것으로는 못 피한다. 대신 배포가 끝날 때 앞단을 비운다.
 // - 데이터 파일 이름에 버전이 들어 있어(data/public.<ts>.json) 한 번 받은 것은 바뀌지 않는다.
 import { normalizePublic } from './model.js';
 
@@ -45,7 +46,7 @@ export async function fetchVersion() {
     if (v && typeof v === 'object') return cleanVersion(v);
   }
   try {
-    const res = await get(docUrl(`version.json?t=${Date.now()}`), { cache: 'no-store' }, 8000);
+    const res = await get(docUrl('version.json'), { cache: 'no-store' }, 8000);
     if (res.status === 404) return cleanVersion(null);
     if (!res.ok) return null;
     return cleanVersion(await res.json());
