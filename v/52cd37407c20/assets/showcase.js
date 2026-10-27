@@ -4,9 +4,9 @@ import { h, clear } from './dom.js';
 import { levelTitle } from './levels.js';
 import { slides } from './model.js';
 import { morph, ready } from './motion.js';
+import { swipe } from './swipe.js';
 
 const AUTO_MS = 4000;
-const SWIPE_PX = 40;
 
 export function createShowcase(host, ctx) {
   let state = null;
@@ -16,13 +16,13 @@ export function createShowcase(host, ctx) {
   }
 
   function build(p) {
-    const list = slides(p);
+    const list = slides(p, ctx.narrow());
     const track = h('div.sc-track', null, list.map((s, i) => h('figure.sc-slide', { dataset: { i } },
       s.shot
         ? h('img', { 'data-src': ctx.asset(s.shot.src), width: s.shot.w, height: s.shot.h, alt: `${s.app.name} 화면 ${i + 1}`, decoding: 'async', draggable: 'false' })
         : h('p.sc-noshot', null, s.app.name))));
     const stage = h('div.sc-stage', { 'aria-roledescription': '화면 넘기기' }, track);
-    // 무대 높이는 가장 긴 화면에 맞춘다(넘길 때 아래 글이 흔들리지 않게). 화면이 없으면 낮은 무대.
+    // 무대 높이는 보여 줄 화면 가운데 가장 긴 것에 맞춘다(넘길 때 아래 글이 흔들리지 않게). 화면이 없으면 낮은 무대.
     const ratio = Math.max(0.4, ...list.map((s) => (s.shot ? s.shot.h / s.shot.w : 0.4)));
     stage.style.setProperty('--r', ratio.toFixed(4));
     const count = h('p.sc-count', null, h('b.num', null, '1'), ` / ${list.length}`);
@@ -101,31 +101,13 @@ export function createShowcase(host, ctx) {
     state.timer = setInterval(() => { if (!document.hidden) go(state.index + 1); }, AUTO_MS);
   }
 
-  function swipe() {
-    let x0 = null;
-    let dx = 0;
-    const { stage, track } = state;
-    stage.addEventListener('pointerdown', (e) => {
-      pause();
-      if (stage.setPointerCapture) stage.setPointerCapture(e.pointerId);
-      x0 = e.clientX;
-      dx = 0;
-      track.classList.add('is-drag');
-    });
-    stage.addEventListener('pointermove', (e) => {
-      if (x0 == null) return;
-      dx = e.clientX - x0;
-      track.style.transform = `translateX(calc(${-100 * state.index}% + ${dx}px))`;
-    });
-    const end = () => {
-      if (x0 == null) return;
-      x0 = null;
-      track.classList.remove('is-drag');
-      go(Math.abs(dx) > SWIPE_PX ? state.index + (dx < 0 ? 1 : -1) : state.index);
-    };
-    stage.addEventListener('pointerup', end);
-    stage.addEventListener('pointercancel', end);
-    stage.addEventListener('pointerleave', end);
+  /** 새 state 를 화면에 붙인다. 열린 채 다시 붙일 때 hide(true) 가 푼 스크롤 잠금(html.sc-open)도 다시 건다. */
+  function mount(at) {
+    host.append(state.root);
+    go(at, { first: true });
+    swipe(state.stage, state.track, { index: () => state.index, go, start: pause });
+    document.addEventListener('keydown', onKey);
+    document.documentElement.classList.add('sc-open');
   }
 
   function onKey(e) {
@@ -148,10 +130,7 @@ export function createShowcase(host, ctx) {
       return morph(() => {
         if (state) this.hide(true);
         state = { ...next, index: 0, paused: false, timer: 0 };
-        host.append(state.root);
-        go(0, { first: true });
-        swipe();
-        document.addEventListener('keydown', onKey);
+        mount(0);
         state.root.focus({ preventScroll: true });
         return ready(state.track.querySelector('.sc-slide img'));
       }, [
@@ -168,11 +147,7 @@ export function createShowcase(host, ctx) {
       const paused = state.paused;
       this.hide(true);
       state = { ...build(p), index: 0, paused, timer: 0 };
-      host.append(state.root);
-      const at = state.list.findIndex((s) => s.app.id === appId);
-      go(Math.max(0, at), { first: true });
-      swipe();
-      document.addEventListener('keydown', onKey);
+      mount(Math.max(0, state.list.findIndex((s) => s.app.id === appId)));
       if (paused) state.root.classList.add('is-manual');
       auto();
     },
@@ -181,12 +156,13 @@ export function createShowcase(host, ctx) {
     hide(quiet, toCard) {
       if (!state) return Promise.resolve();
       const cur = state;
+      state = null; // 닫는 움직임 사이에 온 새 데이터(refresh)가 방금 닫은 쇼케이스를 다시 열지 않게
       clearInterval(cur.timer);
       document.removeEventListener('keydown', onKey);
       const remove = () => {
         cur.root.remove();
-        if (state === cur) state = null;
-        document.documentElement.classList.remove('sc-open');
+        // 닫는 사이 다른 쇼케이스가 열렸으면 잠금을 그대로 둔다
+        if (!state) document.documentElement.classList.remove('sc-open');
       };
       if (quiet) {
         remove();
