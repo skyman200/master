@@ -135,26 +135,45 @@ export function columns(profs) {
     || (latest(a) < latest(b) ? 1 : latest(a) > latest(b) ? -1 : 0) || byName(a, b)));
 }
 
+/** 가장 완성도 높은 교수(벤토 강조): 최고 레벨 → 앱 수 → 최근 승인 순. 열의 맨 앞 카드와 같은 사람. 없으면 null */
+export function featuredProf(profs) {
+  const cols = columns(profs);
+  for (let i = cols.length - 1; i >= 0; i -= 1) if (cols[i].length) return cols[i][0];
+  return null;
+}
+
+/** 벤토 칸에 쓸 앱 화면: wide 면 가로(PC) 화면, 아니면 세로(휴대폰) 화면. 없으면 있는 화면, 화면이 없으면 null */
+export function appShot(a, wide) {
+  if (!a.shots.length) return null;
+  return a.shots.find((s) => tall(s) !== wide) || a.shots[0];
+}
+
 /** 맨 위 숫자: 레벨별 인원, 전체 교수 수, 전체 앱 수(K2). */
 export function totals(profs) {
   const byLevel = LEVELS.map((lv) => profs.filter((p) => p.level === lv.n).length);
   return { byLevel, profs: profs.length, apps: profs.reduce((n, p) => n + p.apps.length, 0) };
 }
 
-/** 쇼케이스 장면: 앱 순서대로 그 앱의 화면 한 장씩. 화면이 없는 앱은 글자만 있는 장면 하나. */
-export function slides(p) {
+const tall = (s) => s.h > s.w;
+
+/**
+ * 쇼케이스 장면: 앱 순서대로 그 앱의 화면 한 장씩. 화면이 없는 앱은 글자만 있는 장면 하나.
+ * narrow(휴대폰)면 휴대폰(세로) 화면만, 아니면 PC(가로) 화면만 쓴다. 그 모양이 없는 앱은 있는 화면을 쓴다.
+ */
+export function slides(p, narrow = false) {
   const out = [];
   p.apps.forEach((a, ai) => {
     if (!a.shots.length) out.push({ app: a, appIndex: ai, shot: null });
-    a.shots.forEach((s) => out.push({ app: a, appIndex: ai, shot: s }));
+    const fit = a.shots.filter((s) => tall(s) === narrow);
+    (fit.length ? fit : a.shots).forEach((s) => out.push({ app: a, appIndex: ai, shot: s }));
   });
   return out;
 }
 
-/** 카드 대표 화면: 맨 앞 앱의 첫 화면. */
+/** 카드 대표 화면: 맨 앞 앱의 휴대폰(세로) 화면(카드 너비에서도 글자가 읽힌다). 없으면 그 앱의 첫 화면. */
 export function coverShot(p) {
   const a = p.apps.find((x) => x.shots.length);
-  return a ? a.shots[0] : null;
+  return a ? a.shots.find(tall) || a.shots[0] : null;
 }
 
 export function findProf(data, id) {
