@@ -1,5 +1,6 @@
 // 화면 시작점: 주소(#/…)에 따라 칸반·쇼케이스·배지·등록·확인 화면을 그린다.
-// #/sample/… 은 같은 화면을 가짜 데이터로 보여 주는 '예시 화면'이다(정식 오픈 때 지운다).
+// #/sample/… 은 같은 화면을 가짜 데이터로 보여 주는 '예시 화면'이다.
+// 오픈한 화면은 예시를 빼고 만든다(SAMPLE=false). 그때 #/sample/… 은 같은 자리의 진짜 화면으로 간다.
 import { h, clear } from './dom.js';
 import { fetchVersion, fetchPublic, fetchSample, assetUrl } from './data.js';
 import { findProf } from './model.js';
@@ -9,11 +10,14 @@ import { createShowcase } from './showcase.js';
 import { renderBadge } from './badge.js';
 import { renderRegister, formBusy } from './form.js';
 import { renderConfirm } from './confirm.js';
+import { renderAdmin } from './admin.js';
 import { startUpdates } from './update.js';
+import { SAMPLE } from './config.js';
 
 window.__app = true;
 
 const SITE = 'DIT AI 3-LEVEL 인증 · 앱 제작 실적';
+const SAMPLE_PATH = /^#\/?sample(?:\/|$)/;
 const view = document.getElementById('view');
 const layer = document.getElementById('layer');
 const live = { ts: '', data: null, error: null };
@@ -24,7 +28,7 @@ let lastInput = 0;
 function parse(hash) {
   let path = (hash || '').replace(/^#\/?/, '');
   let mode = 'live';
-  if (path === 'sample' || path.startsWith('sample/')) {
+  if (SAMPLE && (path === 'sample' || path.startsWith('sample/'))) {
     mode = 'sample';
     path = path.slice('sample'.length).replace(/^\//, '');
   }
@@ -33,6 +37,7 @@ function parse(hash) {
   if (a === 'p' && id) return { mode, page: 'kanban', prof: id };
   if (a === 'badge' && id) return { mode, page: 'badge', prof: id };
   if (a === 'register') return { mode, page: 'register' };
+  if (a === 'admin' && mode === 'live') return { mode, page: 'admin' };
   if (a === 'confirm' && mode === 'live') return { mode, page: 'confirm', token: id };
   return { mode, page: 'kanban' };
 }
@@ -49,11 +54,21 @@ function context(mode) {
   };
 }
 
+// 휴대폰 너비면 쇼케이스가 휴대폰 화면을 넘긴다. 화면을 돌려 너비가 바뀌면 열린 쇼케이스를 그 앱 자리에서 다시 그린다.
+const narrow = matchMedia('(max-width: 599px)');
 const showcase = createShowcase(layer, {
   get prefix() { return currentMode() === 'sample' ? '#/sample' : '#'; },
   asset: (p) => assetUrl(currentMode(), p),
+  narrow: () => narrow.matches,
   reduced: reducedMotion,
   close: closeShowcase,
+});
+narrow.addEventListener('change', () => {
+  if (!showcase.open) return;
+  dataFor(currentMode()).then((d) => {
+    const p = findProf(d, showcase.id);
+    if (p) showcase.refresh(p);
+  }, () => {});
 });
 
 function currentMode() {
@@ -103,17 +118,19 @@ function closeShowcase() {
 }
 
 async function route() {
+  if (!SAMPLE && SAMPLE_PATH.test(location.hash)) history.replaceState(history.state, '', location.hash.replace(SAMPLE_PATH, '#/'));
   const r = parse(location.hash);
   const ctx = context(r.mode);
   chrome(r.mode);
-  if (r.page === 'register' || r.page === 'confirm') {
+  if (r.page === 'register' || r.page === 'confirm' || r.page === 'admin') {
     await showcase.hide(true);
     await morph(() => {
       if (r.page === 'register') renderRegister(view, ctx);
+      else if (r.page === 'admin') renderAdmin(view, ctx);
       else renderConfirm(view, r.token, ctx);
     });
     shown = { key: `${r.mode}:${r.page}` };
-    document.title = `${r.page === 'register' ? '앱 등록하기' : '메일 확인'} · ${SITE}`;
+    document.title = `${{ register: '앱 등록하기', admin: '관리자', confirm: '메일 확인' }[r.page]} · ${SITE}`;
     window.scrollTo(0, 0);
     return;
   }
