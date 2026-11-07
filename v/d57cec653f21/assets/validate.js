@@ -51,15 +51,10 @@ export function isInternalHost(hostname) {
   return !host.includes('.') || INTERNAL_SUFFIX.test(host);
 }
 
-/** 공개되는 주소의 경로·?·# 뒤에 든 이메일(%40 도, '/@아이디' 는 아님) */
+/** 공개되는 주소의 경로·?·# 뒤에 든 이메일('%40'·'%2E' 같은 표기도 풀어서, 두 번 싼 것까지. '/@아이디' 는 아님) */
 function urlHasEmail(s) {
-  const rest = String(s == null ? '' : s).trim().replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, '');
-  let plain;
-  try {
-    plain = decodeURIComponent(rest);
-  } catch (e) {
-    plain = rest.replace(/%40/gi, '@');
-  }
+  let plain = String(s == null ? '' : s).trim().replace(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i, '');
+  for (let i = 0; i < 3; i += 1) plain = plain.replace(/%([0-7][0-9a-f])/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
   return /[\w.%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/.test(plain);
 }
 

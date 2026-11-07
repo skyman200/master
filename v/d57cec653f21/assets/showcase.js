@@ -16,13 +16,13 @@ export function createShowcase(host, ctx) {
   }
 
   function build(p) {
-    const list = slides(p);
+    const list = slides(p, ctx.narrow());
     const track = h('div.sc-track', null, list.map((s, i) => h('figure.sc-slide', { dataset: { i } },
       s.shot
         ? h('img', { 'data-src': ctx.asset(s.shot.src), width: s.shot.w, height: s.shot.h, alt: `${s.app.name} 화면 ${i + 1}`, decoding: 'async', draggable: 'false' })
         : h('p.sc-noshot', null, s.app.name))));
     const stage = h('div.sc-stage', { 'aria-roledescription': '화면 넘기기' }, track);
-    // 무대 높이는 가장 긴 화면에 맞춘다(넘길 때 아래 글이 흔들리지 않게). 화면이 없으면 낮은 무대.
+    // 무대 높이는 보여 줄 화면 가운데 가장 긴 것에 맞춘다(넘길 때 아래 글이 흔들리지 않게). 화면이 없으면 낮은 무대.
     const ratio = Math.max(0.4, ...list.map((s) => (s.shot ? s.shot.h / s.shot.w : 0.4)));
     stage.style.setProperty('--r', ratio.toFixed(4));
     const count = h('p.sc-count', null, h('b.num', null, '1'), ` / ${list.length}`);
